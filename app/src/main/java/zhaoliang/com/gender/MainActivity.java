@@ -8,6 +8,7 @@ import android.os.Bundle;
 import android.os.Environment;
 import android.support.v4.app.ActivityCompat;
 import android.support.v7.app.AppCompatActivity;
+import android.text.TextUtils;
 import android.view.View;
 import android.widget.ArrayAdapter;
 import android.widget.ListView;
@@ -19,8 +20,10 @@ import com.alibaba.fastjson.JSONObject;
 import java.io.BufferedReader;
 import java.io.File;
 import java.io.FileInputStream;
+import java.io.FileOutputStream;
 import java.io.IOException;
 import java.io.InputStreamReader;
+import java.io.PrintStream;
 import java.io.RandomAccessFile;
 import java.util.ArrayList;
 import java.util.List;
@@ -258,12 +261,36 @@ public class MainActivity extends AppCompatActivity {
         protected void onPostExecute(Void aVoid) {
 
             //new String[]{"-s", "0", "-c", "128.0", "-t", "2", "-g", "8.0", "-e", "0.1", scaleFile, modelFile}
+// 使用RandomAccessFile , 从后找最后一行数据
+            RandomAccessFile raf = null;
+            try {
+                raf = new RandomAccessFile(Environment.getExternalStorageDirectory() + File.separator + "gender" + File.separator + "acc", "r");
+
+                long len = raf.length();
+                String lastLine = "";
+                if (len != 0L) {
+                    long pos = len - 1;
+                    while (pos > 0) {
+                        pos--;
+                        raf.seek(pos);
+                        if (raf.readByte() == '\n') {
+                            lastLine = raf.readLine();
+                            break;
+                        }
+                    }
+                }
+                raf.close();
+                if (!TextUtils.isEmpty(lastLine))
+                    tvRequest.setText(lastLine);
+            } catch (Exception e) {
+                e.printStackTrace();
+            }
+
             try {
                 svm_train.main(new String[]{"-b", "1", trainFilePath, modelFilePath});
             } catch (IOException e) {
                 e.printStackTrace();
             }
-            tvRequest.setText("请求样本成功！");
         }
 
         @Override
@@ -308,6 +335,17 @@ public class MainActivity extends AppCompatActivity {
                 stringBuilder.append(" 15:" + feature.getP5());
                 stringBuilder.append("\n");
                 randomAccessFile.write(stringBuilder.toString().getBytes());
+            }
+
+            // 交差验证
+            try {
+                PrintStream printStream = new PrintStream(new FileOutputStream(Environment.getExternalStorageDirectory() + File.separator + "gender" + File.separator + "acc"));
+                PrintStream out = System.out;
+                System.setOut(printStream);
+                svm_train.main(new String[]{"-v", "10", trainFilePath});
+                System.setOut(out);
+            } catch (Exception e) {
+                e.printStackTrace();
             }
         }
     }
